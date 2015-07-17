@@ -1,16 +1,17 @@
-# Msgpack parser plugin for Embulk
+# MessagePack parser plugin for Embulk
 
-TODO: Write short description here and build.gradle file.
+Parses files encoded in MessagePack.
 
 ## Overview
 
 * **Plugin type**: parser
-* **Guess supported**: no
+* **Guess supported**: yes
 
 ## Configuration
 
-- **property1**: description (string, required)
-- **property2**: description (integer, default: default-value)
+- **row_encoding**: type of a row. "array" or "map" (enum, default: map)
+- **file_encoding**: if a file includes a big array, set "array". Otherwise, if a file includes sequence of rows, set "sequence" (enum, default: sequence)
+- **columns**: description (schema, required)
 
 ## Example
 
@@ -19,11 +20,12 @@ in:
   type: any file input plugin type
   parser:
     type: msgpack
-    property1: example1
-    property2: example2
+    row_encoding: map
+    file_encoding: sequence
+    columns:
+    - {index: 0, name: a, type: long}
+    - {index: 1, name: b, type: string}
 ```
-
-(If guess supported) you don't have to write `parser:` section in the configuration file. After writing `in:` section, you can let embulk guess `parser:` section using this command:
 
 ```
 $ embulk gem install embulk-parser-msgpack

@@ -55,7 +55,7 @@ Gem::Specification.new do |spec|
   spec.version       = "${project.version}"
   spec.authors       = ["Sadayuki Furuhashi"]
   spec.summary       = %[MessagePack parser plugin for Embulk]
-  spec.description   = %[Parses MessagePack files.]
+  spec.description   = %[Parses files encoded in MessagePack.]
   spec.email         = ["frsyuki@gmail.com"]
   spec.licenses      = ["Apache 2.0"]
   spec.homepage      = "https://github.com/frsyuki/embulk-parser-msgpack"
