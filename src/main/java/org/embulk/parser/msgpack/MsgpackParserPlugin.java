@@ -6,6 +6,7 @@ import java.util.TreeMap;
 import java.util.Comparator;
 import java.io.IOException;
 import java.io.EOFException;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
@@ -32,12 +33,26 @@ import org.embulk.spi.Column;
 import org.embulk.spi.ColumnConfig;
 import org.embulk.spi.time.Timestamp;
 import org.embulk.spi.time.TimestampParser;
+import org.embulk.spi.time.TimestampFormatter;
 import org.embulk.spi.PageBuilder;
 import org.embulk.spi.BufferAllocator;
+import org.embulk.spi.type.Type;
+import org.embulk.spi.type.BooleanType;
+import org.embulk.spi.type.LongType;
+import org.embulk.spi.type.DoubleType;
+import org.embulk.spi.type.StringType;
+import org.embulk.spi.type.TimestampType;
 import org.embulk.spi.util.Timestamps;
 import org.embulk.spi.util.DynamicPageBuilder;
 import org.embulk.spi.util.DynamicColumnSetter;
 import org.embulk.spi.util.DynamicColumnSetterFactory;
+import org.embulk.spi.util.dynamic.BooleanColumnSetter;
+import org.embulk.spi.util.dynamic.LongColumnSetter;
+import org.embulk.spi.util.dynamic.DoubleColumnSetter;
+import org.embulk.spi.util.dynamic.StringColumnSetter;
+import org.embulk.spi.util.dynamic.TimestampColumnSetter;
+import org.embulk.spi.util.dynamic.DefaultValueSetter;
+import org.embulk.spi.util.dynamic.NullDefaultValueSetter;
 
 public class MsgpackParserPlugin
         implements ParserPlugin
@@ -126,6 +141,14 @@ public class MsgpackParserPlugin
         }
     }
 
+    public interface PluginTaskFormatter
+            extends Task, TimestampFormatter.Task
+    { }
+
+    private interface TimestampColumnOption
+            extends Task, TimestampFormatter.TimestampColumnOption
+    { }
+
     private static class FileInputMessageBufferInput
             implements MessageBufferInput
     {
@@ -140,6 +163,9 @@ public class MsgpackParserPlugin
         public MessageBuffer next()
         {
             Buffer b = input.poll();
+            if (b == null) {
+                throw new EndOfBufferException();
+            }
             return MessageBuffer.wrap(b.array()).slice(b.offset(), b.limit());
         }
 
@@ -147,6 +173,15 @@ public class MsgpackParserPlugin
         public void close()
         {
             input.close();
+        }
+    }
+
+    private static class EndOfBufferException
+            extends RuntimeException
+    {
+        public EndOfBufferException()
+        {
+            super("End of buffer");
         }
     }
 
@@ -164,51 +199,88 @@ public class MsgpackParserPlugin
     {
         PluginTask task = taskSource.loadTask(PluginTask.class);
 
-        TimestampParser[] timestampParsers = Timestamps.newTimestampColumnParsers(task, task.getSchemaConfig());
-        Map<Column, DynamicColumnSetter> setters = newColumnSetters(task.getSchemaConfig(), timestampParsers);
-
-        RowReader reader;
-        switch (task.getRowEncoding()) {
-        case ARRAY:
-            reader = new ArrayRowReader(setters);
-            break;
-        case MAP:
-            reader = new MapRowReader(setters);
-            break;
-        default:
-            throw new IllegalArgumentException("Unexpected row encoding");
-        }
+        RowEncoding rowEncoding = task.getRowEncoding();
+        FileEncoding fileEncoding = task.getFileEncoding();
 
         try (MessageUnpacker unpacker = new MessageUnpacker(new FileInputMessageBufferInput(input));
                 PageBuilder pageBuilder = new PageBuilder(task.getBufferAllocator(), schema, output)) {
-            switch (task.getFileEncoding()) {
-            case SEQUENCE:
-                // do nothing
-                break;
+
+            TimestampParser[] timestampParsers = Timestamps.newTimestampColumnParsers(task, task.getSchemaConfig());
+            Map<Column, DynamicColumnSetter> setters = newColumnSetters(pageBuilder,
+                    task.getSchemaConfig(), timestampParsers, taskSource.loadTask(PluginTaskFormatter.class));
+
+            RowReader reader;
+            switch (rowEncoding) {
             case ARRAY:
-                // skip array header to convert array to sequence
-                unpacker.unpackArrayHeader();
+                reader = new ArrayRowReader(setters);
                 break;
+            case MAP:
+                reader = new MapRowReader(setters);
+                break;
+            default:
+                throw new IllegalArgumentException("Unexpected row encoding");
             }
 
-            while (true) {
-                boolean cont = reader.next(unpacker);
-                if (!cont) {
+            while (input.nextFile()) {
+                switch (fileEncoding) {
+                case SEQUENCE:
+                    // do nothing
+                    break;
+                case ARRAY:
+                    // skip array header to convert array to sequence
+                    unpacker.unpackArrayHeader();
                     break;
                 }
-                pageBuilder.addRecord();
+
+                while (reader.next(unpacker)) {
+                    pageBuilder.addRecord();
+                }
             }
+
+            pageBuilder.finish();
 
         } catch (IOException ex) {
             throw new RuntimeException(ex);
         }
     }
 
-    private Map<Column, DynamicColumnSetter> newColumnSetters(SchemaConfig schema, TimestampParser[] timestampParsers)
+    private Map<Column, DynamicColumnSetter> newColumnSetters(PageBuilder pageBuilder,
+            SchemaConfig schema, TimestampParser[] timestampParsers, TimestampFormatter.Task formatterTask)
     {
         ImmutableMap.Builder<Column, DynamicColumnSetter> builder = ImmutableMap.builder();
+        int index = 0;
         for (ColumnConfig c : schema.getColumns()) {
-            // TODO
+            Column column = c.toColumn(index);
+            Type type = column.getType();
+
+            DefaultValueSetter defaultValue = new NullDefaultValueSetter();
+            DynamicColumnSetter setter;
+
+            if (type instanceof BooleanType) {
+                setter = new BooleanColumnSetter(pageBuilder, column, defaultValue);
+
+            } else if (type instanceof LongType) {
+                setter = new LongColumnSetter(pageBuilder, column, defaultValue);
+
+            } else if (type instanceof DoubleType) {
+                setter = new DoubleColumnSetter(pageBuilder, column, defaultValue);
+
+            } else if (type instanceof StringType) {
+                TimestampFormatter formatter = new TimestampFormatter(formatterTask,
+                        Optional.of(c.getOption().loadConfig(TimestampColumnOption.class)));
+                setter = new StringColumnSetter(pageBuilder, column, defaultValue, formatter);
+
+            } else if (type instanceof TimestampType) {
+                // TODO use flexible time format like Ruby's Time.parse
+                TimestampParser parser = timestampParsers[column.getIndex()];
+                setter = new TimestampColumnSetter(pageBuilder, column, defaultValue, parser);
+
+            } else {
+                throw new ConfigException("Unknown column type: "+type);
+            }
+
+            builder.put(column, setter);
+            index++;
         }
         return builder.build();
     }
@@ -257,14 +329,15 @@ public class MsgpackParserPlugin
 
         case ARRAY:
         case MAP:
-            setter.set(unpacker.unpackValue().toString());
             // TODO set json?
+            //setter.set(unpacker.unpackValue().toJson());
+            unpacker.skipValue();
+            setter.setNull();
             break;
 
         case EXTENSION:
             unpacker.skipValue();
             setter.setNull();
-            // TODO set null
             break;
         }
     }
@@ -292,7 +365,8 @@ public class MsgpackParserPlugin
             int n;
             try {
                 n = unpacker.unpackArrayHeader();
-            } catch (EOFException ex) {
+            } catch (EndOfBufferException ex) {
+                // TODO EOFException?
                 return false;
             }
             for (int i = 0; i < n; i++) {
@@ -324,7 +398,8 @@ public class MsgpackParserPlugin
             int n;
             try {
                 n = unpacker.unpackMapHeader();
-            } catch (EOFException ex) {
+            } catch (EndOfBufferException ex) {
+                // TODO EOFException?
                 return false;
             }
             for (int i = 0; i < n; i++) {

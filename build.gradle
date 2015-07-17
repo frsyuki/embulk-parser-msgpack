@@ -18,7 +18,7 @@ version = "0.1.0"
 dependencies {
     compile  "org.embulk:embulk-core:0.6.17"
     provided "org.embulk:embulk-core:0.6.17"
-    compile "org.msgpack:msgpack-core:0.7.0-p10"
+    compile "org.msgpack:msgpack-core:0.7.0-M6"
     testCompile "junit:junit:4.+"
 }
 
