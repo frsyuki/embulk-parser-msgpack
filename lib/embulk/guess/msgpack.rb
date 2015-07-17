@@ -77,8 +77,8 @@ module Embulk
 
         return {"parser" => parser_guessed}
 
-      #rescue org.msgpack.core.MessagePackException
-      #  return {}
+      rescue org.msgpack.core.MessagePackException
+        return {}
       end
 
       def new_unpacker(sample_buffer)
