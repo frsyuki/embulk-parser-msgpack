@@ -1,4 +1,4 @@
-package org.embulk.parser;
+package org.embulk.parser.msgpack;
 
 import java.math.BigInteger;
 import java.util.Map;
@@ -18,6 +18,7 @@ import org.embulk.config.Config;
 import org.embulk.config.ConfigException;
 import org.embulk.config.ConfigDefault;
 import org.embulk.config.ConfigDiff;
+import org.embulk.config.ConfigInject;
 import org.embulk.config.ConfigSource;
 import org.embulk.config.Task;
 import org.embulk.config.TaskSource;
@@ -32,6 +33,7 @@ import org.embulk.spi.ColumnConfig;
 import org.embulk.spi.time.Timestamp;
 import org.embulk.spi.time.TimestampParser;
 import org.embulk.spi.PageBuilder;
+import org.embulk.spi.BufferAllocator;
 import org.embulk.spi.util.Timestamps;
 import org.embulk.spi.util.DynamicPageBuilder;
 import org.embulk.spi.util.DynamicColumnSetter;
@@ -41,7 +43,7 @@ public class MsgpackParserPlugin
         implements ParserPlugin
 {
     public interface PluginTask
-            extends Task
+            extends Task, TimestampParser.Task
     {
         @Config("file_encoding")
         @ConfigDefault("\"sequence\"")
@@ -53,6 +55,9 @@ public class MsgpackParserPlugin
 
         @Config("columns")
         public SchemaConfig getSchemaConfig();
+
+        @ConfigInject
+        public BufferAllocator getBufferAllocator();
     }
 
     public static enum FileEncoding
@@ -159,7 +164,6 @@ public class MsgpackParserPlugin
     {
         PluginTask task = taskSource.loadTask(PluginTask.class);
 
-        PageBuilder pageBuilder;
         TimestampParser[] timestampParsers = Timestamps.newTimestampColumnParsers(task, task.getSchemaConfig());
         Map<Column, DynamicColumnSetter> setters = newColumnSetters(task.getSchemaConfig(), timestampParsers);
 
@@ -171,9 +175,12 @@ public class MsgpackParserPlugin
         case MAP:
             reader = new MapRowReader(setters);
             break;
+        default:
+            throw new IllegalArgumentException("Unexpected row encoding");
         }
 
-        try (MessageUnpacker unpacker = new MessageUnpacker(new FileInputMessageBufferInput(input))) {
+        try (MessageUnpacker unpacker = new MessageUnpacker(new FileInputMessageBufferInput(input));
+                PageBuilder pageBuilder = new PageBuilder(task.getBufferAllocator(), schema, output)) {
             switch (task.getFileEncoding()) {
             case SEQUENCE:
                 // do nothing
