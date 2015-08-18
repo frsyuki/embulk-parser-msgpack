@@ -1,3 +1,7 @@
+Release 0.1.1 - 2015-08-18
+
+* Fixed a key comparator problem
+
 Release 0.1.0 - 2015-08-11
 
 * The first release
