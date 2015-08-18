@@ -408,7 +408,9 @@ public class MsgpackParserPlugin
                     unpacker.skipValue();
                     continue;
                 }
-                MessageBuffer key = unpacker.readPayloadAsReference(unpacker.unpackRawStringHeader());
+                // TODO optimize
+                //MessageBuffer key = unpacker.readPayloadAsReference(unpacker.unpackRawStringHeader());
+                String key = new String(unpacker.readPayload(unpacker.unpackRawStringHeader()));
                 DynamicColumnSetter setter = columnSetters.get(key);
                 if (setter != null) {
                     unpackToSetter(unpacker, setter);
