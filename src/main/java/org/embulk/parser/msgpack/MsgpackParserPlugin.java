@@ -10,8 +10,10 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMap;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageFormat;
 import org.msgpack.core.MessageUnpacker;
+import org.msgpack.core.MessageInsufficientBufferException;
 import org.msgpack.core.buffer.MessageBuffer;
 import org.msgpack.core.buffer.MessageBufferInput;
 import org.msgpack.value.ValueType;
@@ -153,6 +155,7 @@ public class MsgpackParserPlugin
             implements MessageBufferInput
     {
         private final FileInput input;
+        private Buffer lastBuffer = null;
 
         public FileInputMessageBufferInput(FileInput input)
         {
@@ -163,25 +166,25 @@ public class MsgpackParserPlugin
         public MessageBuffer next()
         {
             Buffer b = input.poll();
-            if (b == null) {
-                throw new EndOfBufferException();
+            if (lastBuffer != null) {
+                lastBuffer.release();
             }
-            return MessageBuffer.wrap(b.array()).slice(b.offset(), b.limit());
+            lastBuffer = b;
+            if (b == null) {
+                return null;
+            }
+            else {
+                return MessageBuffer.wrap(b.array()).slice(b.offset(), b.limit());
+            }
         }
 
         @Override
         public void close()
         {
+            if (lastBuffer != null) {
+                lastBuffer.release();
+            }
             input.close();
-        }
-    }
-
-    private static class EndOfBufferException
-            extends RuntimeException
-    {
-        public EndOfBufferException()
-        {
-            super("End of buffer");
         }
     }
 
@@ -202,7 +205,7 @@ public class MsgpackParserPlugin
         RowEncoding rowEncoding = task.getRowEncoding();
         FileEncoding fileEncoding = task.getFileEncoding();
 
-        try (MessageUnpacker unpacker = new MessageUnpacker(new FileInputMessageBufferInput(input));
+        try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(new FileInputMessageBufferInput(input));
                 PageBuilder pageBuilder = new PageBuilder(task.getBufferAllocator(), schema, output)) {
 
             TimestampParser[] timestampParsers = Timestamps.newTimestampColumnParsers(task, task.getSchemaConfig());
@@ -365,7 +368,7 @@ public class MsgpackParserPlugin
             int n;
             try {
                 n = unpacker.unpackArrayHeader();
-            } catch (EndOfBufferException ex) {
+            } catch (MessageInsufficientBufferException ex) {
                 // TODO EOFException?
                 return false;
             }
@@ -398,7 +401,7 @@ public class MsgpackParserPlugin
             int n;
             try {
                 n = unpacker.unpackMapHeader();
-            } catch (EndOfBufferException ex) {
+            } catch (MessageInsufficientBufferException ex) {
                 // TODO EOFException?
                 return false;
             }
