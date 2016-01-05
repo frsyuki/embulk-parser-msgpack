@@ -11,6 +11,7 @@ import com.google.common.collect.ImmutableMap;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import org.msgpack.core.MessageFormat;
+import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageUnpacker;
 import org.msgpack.core.buffer.MessageBuffer;
 import org.msgpack.core.buffer.MessageBufferInput;
@@ -202,7 +203,7 @@ public class MsgpackParserPlugin
         RowEncoding rowEncoding = task.getRowEncoding();
         FileEncoding fileEncoding = task.getFileEncoding();
 
-        try (MessageUnpacker unpacker = new MessageUnpacker(new FileInputMessageBufferInput(input));
+        try (MessageUnpacker unpacker = new MessageUnpacker(new FileInputMessageBufferInput(input), new MessagePack.UnpackerConfig());
                 PageBuilder pageBuilder = new PageBuilder(task.getBufferAllocator(), schema, output)) {
 
             TimestampParser[] timestampParsers = Timestamps.newTimestampColumnParsers(task, task.getSchemaConfig());
