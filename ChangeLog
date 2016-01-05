@@ -1,3 +1,8 @@
+Release 0.1.2 - 2016-01-05
+
+* Fixed memory leak of input buffers
+* Upgraded msgpack version to v0.8 which supports external buffer pools
+
 Release 0.1.1 - 2015-08-18
 
 * Fixed a key comparator problem
