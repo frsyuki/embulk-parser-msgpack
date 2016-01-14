@@ -1,3 +1,8 @@
+Release 0.2.0 - 2016-01-13
+
+* Upgraded embulk version to v0.8.1
+* Added support for json type
+
 Release 0.1.4 - 2016-01-07
 
 * Fixed JVM class file version from JDK 8 to JDK 7
