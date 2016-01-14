@@ -339,8 +339,7 @@ public class MsgpackParserPlugin
 
         case ARRAY:
         case MAP:
-            // TODO embulk 0.8.1 will add set(Value) api to DynamicColumnSetter
-            ((org.embulk.spi.util.dynamic.AbstractDynamicColumnSetter) setter).set(unpacker.unpackValue());
+            setter.set(unpacker.unpackValue());
             break;
 
         case EXTENSION:
