@@ -44,6 +44,7 @@ import org.embulk.spi.type.LongType;
 import org.embulk.spi.type.DoubleType;
 import org.embulk.spi.type.StringType;
 import org.embulk.spi.type.TimestampType;
+import org.embulk.spi.type.JsonType;
 import org.embulk.spi.util.Timestamps;
 import org.embulk.spi.util.DynamicPageBuilder;
 import org.embulk.spi.util.DynamicColumnSetter;
@@ -53,6 +54,7 @@ import org.embulk.spi.util.dynamic.LongColumnSetter;
 import org.embulk.spi.util.dynamic.DoubleColumnSetter;
 import org.embulk.spi.util.dynamic.StringColumnSetter;
 import org.embulk.spi.util.dynamic.TimestampColumnSetter;
+import org.embulk.spi.util.dynamic.JsonColumnSetter;
 import org.embulk.spi.util.dynamic.DefaultValueSetter;
 import org.embulk.spi.util.dynamic.NullDefaultValueSetter;
 
@@ -278,6 +280,11 @@ public class MsgpackParserPlugin
                 TimestampParser parser = timestampParsers[column.getIndex()];
                 setter = new TimestampColumnSetter(pageBuilder, column, defaultValue, parser);
 
+            } else if (type instanceof JsonType) {
+                TimestampFormatter formatter = new TimestampFormatter(formatterTask,
+                        Optional.of(c.getOption().loadConfig(TimestampColumnOption.class)));
+                setter = new JsonColumnSetter(pageBuilder, column, defaultValue, formatter);
+
             } else {
                 throw new ConfigException("Unknown column type: "+type);
             }
@@ -332,10 +339,8 @@ public class MsgpackParserPlugin
 
         case ARRAY:
         case MAP:
-            // TODO set json?
-            //setter.set(unpacker.unpackValue().toJson());
-            unpacker.skipValue();
-            setter.setNull();
+            // TODO embulk 0.8.1 will add set(Value) api to DynamicColumnSetter
+            ((org.embulk.spi.util.dynamic.AbstractDynamicColumnSetter) setter).set(unpacker.unpackValue());
             break;
 
         case EXTENSION:
