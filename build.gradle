@@ -22,7 +22,6 @@ targetCompatibility = 1.7
 dependencies {
     compile  "org.embulk:embulk-core:0.8.1"
     provided "org.embulk:embulk-core:0.8.1"
-    compile "org.msgpack:msgpack-core:0.8.1"
     testCompile "junit:junit:4.+"
 }
 
