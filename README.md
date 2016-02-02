@@ -19,6 +19,25 @@ seed.yml:
 
 ```yaml
 in:
+  # here can use any file input plugin type such as file, s3, gcs, etc.
+  type: file
+  path_prefix: /path/to/file/or/directory
+  parser:
+    type: msgpack
+```
+
+Command:
+
+```
+$ embulk gem install embulk-parser-msgpack
+$ embulk guess -g msgpack seed.yml -o config.yml
+$ embulk run config.yml
+```
+
+The guessed config.yml will include column settings:
+
+```yaml
+in:
   type: any file input plugin type
   parser:
     type: msgpack
@@ -29,13 +48,6 @@ in:
     - {index: 1, name: b, type: string}
 ```
 
-Command:
-
-```
-$ embulk gem install embulk-parser-msgpack
-$ embulk guess -g msgpack seed.yml -o config.yml
-$ embulk run config.yml
-```
 
 ## Build
 
