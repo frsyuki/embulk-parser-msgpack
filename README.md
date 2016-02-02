@@ -15,6 +15,8 @@ Parses files encoded in MessagePack.
 
 ## Example
 
+seed.yml:
+
 ```yaml
 in:
   type: any file input plugin type
@@ -27,9 +29,12 @@ in:
     - {index: 1, name: b, type: string}
 ```
 
+Command:
+
 ```
 $ embulk gem install embulk-parser-msgpack
-$ embulk guess -g msgpack config.yml -o guessed.yml
+$ embulk guess -g msgpack seed.yml -o config.yml
+$ embulk run config.yml
 ```
 
 ## Build
